@@ -106,6 +106,12 @@
                 targetVideo.currentTime = 0;
                 targetVideo.play(); // now allowed because user clicked the button first
                 paperDetected = true;
+
+                // Android-specific scroll to video
+                const isAndroid = /Android/i.test(navigator.userAgent);
+                if (isAndroid) {
+                    targetVideo.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }
             } else if (!currentPaper && paperDetected) {
                 targetVideo.pause();
                 targetVideo.currentTime = 0;

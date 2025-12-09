@@ -15,22 +15,30 @@
         button { padding: 15px 30px; font-size: 20px; background: #007bff; color: white; border: none; border-radius: 10px; cursor: pointer; margin: 20px; }
         button:hover { background: #0056b3; }
         h1 { color: #333; }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            body { margin: 10px; padding: 10px; }
+            .container { flex-direction: column; gap: 20px; }
+            .box { padding: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+            canvas, video { width: 100%; height: auto; max-width: 100%; }
+            button { padding: 12px 24px; font-size: 18px; margin: 15px; }
+            h1 { font-size: 24px; }
+            p { font-size: 16px; }
+        }
     </style>
 </head>
 <body>
     <h1>Show an &#129783 → Video Plays!</h1>
     <p>Close your hand → video pauses and resets</p>
-
     <!-- One-time activation button (required by browsers) -->
     <button id="startBtn">CLICK HERE TO ACTIVATE CAMERA & VIDEO</button>
-
     <div class="container" id="mainContainer" style="display:none;">
         <div class="box">
             <h2>Camera</h2>
             <video id="webcam" autoplay playsinline width="640" height="480" style="display:none;"></video>
             <canvas id="output_canvas" width="640" height="480"></canvas>
         </div>
-
         <div class="box">
             <h2>Brand Video</h2>
             <video id="myVideo" width="640" height="480" loop muted>
@@ -39,7 +47,6 @@
             </video>
         </div>
     </div>
-
     <script>
         const startBtn = document.getElementById('startBtn');
         const mainContainer = document.getElementById('mainContainer');
@@ -48,15 +55,12 @@
         const canvasCtx = canvasElement.getContext('2d');
         const targetVideo = document.getElementById('myVideo');
         let paperDetected = false;
-
         // Unlock everything on first click
         startBtn.onclick = async () => {
             startBtn.style.display = 'none';
             mainContainer.style.display = 'flex';
-
             // Preload the video so it can play instantly later
             targetVideo.load();
-
             const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`});
             hands.setOptions({
                 maxNumHands: 1,
@@ -65,22 +69,19 @@
                 minTrackingConfidence: 0.6
             });
             hands.onResults(onResults);
-
             const camera = new Camera(videoElement, {
                 onFrame: async () => await hands.send({image: videoElement}),
                 width: 640,
-                height: 480
+                height: 480,
+                facingMode: 'user'  // Use front camera on mobile
             });
             camera.start();
         };
-
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
             let currentPaper = false;
-
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 for (const landmarks of results.multiHandLandmarks) {
                     drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
@@ -88,21 +89,18 @@
                     if (isPaper(landmarks)) currentPaper = true;
                 }
             }
-
             // Video control
             if (currentPaper && !paperDetected) {
                 targetVideo.currentTime = 0;
-                targetVideo.play();           // now allowed because user clicked the button first
+                targetVideo.play(); // now allowed because user clicked the button first
                 paperDetected = true;
             } else if (!currentPaper && paperDetected) {
                 targetVideo.pause();
                 targetVideo.currentTime = 0;
                 paperDetected = false;
             }
-
             canvasCtx.restore();
         }
-
         function isPaper(landmarks) {
             const tips = [4, 8, 12, 16, 20];
             const mcps = [2, 5, 9, 13, 17];

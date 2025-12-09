@@ -3,46 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paper Gesture Detector - Web Version</title>
+    <title>Paper Gesture → Play Video (Side by Side)</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.1/control_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js" crossorigin="anonymous"></script>
     <style>
-        body { margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }
-        #output_canvas { border: 2px solid #000; }
-        #myVideo { margin-top: 20px; width: 640px; display: none; }  /* Hidden until detected */
+        body {
+            margin: 20px;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .box {
+            background: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        canvas, video {
+            border: 4px solid #333;
+            border-radius: 10px;
+        }
+        h1 { color: #333; }
+        p { font-size: 18px; color: #555; }
     </style>
 </head>
 <body>
-    <h1>Paper Gesture → Play Video</h1>
-    <video id="webcam" autoplay playsinline style="display: none;"></video>
-    <canvas id="output_canvas" width="640" height="480"></canvas>
-    <video id="myVideo" controls>
-        <source src="Uber.mp4" type="video/mp4">  <!-- Replace with your local video path -->
-        Your browser does not support the video tag.
-    </video>
-    <p>Show an open palm (paper gesture) to play the video!</p>
+    <h1>Show Paper Gesture → Video Plays!</h1>
+    <p>Close hand or hide it → video stops and resets</p>
+
+    <div class="container">
+        <!-- Camera Feed -->
+        <div class="box">
+            <h2>Camera</h2>
+            <video id="webcam" autoplay playsinline width="640" height="480" style="display:none;"></video>
+            <canvas id="output_canvas" width="640" height="480"></canvas>
+        </div>
+
+        <!-- Your Video -->
+        <div class="box">
+            <h2>Your Video (plays only on Paper)</h2>
+            <video id="myVideo" width="640" height="480" controls>
+                <source src="your_video.mp4" type="video/mp4">
+                Your browser does not support video.
+            </video>
+        </div>
+    </div>
 
     <script>
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const videoPlayer = document.getElementById('myVideo');
+        const targetVideo = document.getElementById('myVideo');
 
-        // MediaPipe Hands setup
+        let paperDetected = false;
+
         const hands = new Hands({locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`;
         }});
+
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
         });
         hands.onResults(onResults);
 
-        // Camera setup
         const camera = new Camera(videoElement, {
             onFrame: async () => {
                 await hands.send({image: videoElement});
@@ -52,38 +86,51 @@
         });
         camera.start();
 
-        // Handle results
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-            if (results.multiHandLandmarks) {
+            let currentPaper = false;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 for (const landmarks of results.multiHandLandmarks) {
                     drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
                     drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2});
 
                     if (isPaper(landmarks)) {
-                        videoPlayer.style.display = 'block';
-                        videoPlayer.play();
+                        currentPaper = true;
                     }
                 }
             }
+
+            // Control video based on paper gesture
+            if (currentPaper && !paperDetected) {
+                // Paper just appeared → play from start
+                targetVideo.currentTime = 0;
+                targetVideo.play();
+                paperDetected = true;
+            } else if (!currentPaper && paperDetected) {
+                // Paper disappeared → pause and reset
+                targetVideo.pause();
+                targetVideo.currentTime = 0;
+                paperDetected = false;
+            }
+
             canvasCtx.restore();
         }
 
-        // Ultra-lenient paper detection (similar to Python version)
+        // Very forgiving paper detection
         function isPaper(landmarks) {
-            const tips = [4, 8, 12, 16, 20];  // thumb, index, middle, ring, pinky tips
-            const mcps = [2, 5, 9, 13, 17];   // knuckles
-
-            let extendedCount = 0;
-            for (let i = 0; i < tips.length; i++) {
-                if (landmarks[tips[i]].y < landmarks[mcps[i]].y - 0.04) {
-                    extendedCount++;
+            const tips = [4, 8, 12, 16, 20];
+            const mcps = [2, 5, 9, 13, 17];
+            let extended = 0;
+            for (let i = 0; i < 5; i++) {
+                if (landmarks[tips[i]].y < landmarks[mcps[i]].y - 0.03) {
+                    extended++;
                 }
             }
-            return extendedCount >= 4;  // At least 4 fingers extended
+            return extended >= 4;  // thumb can be tricky, so 4/5 is enough
         }
     </script>
 </body>

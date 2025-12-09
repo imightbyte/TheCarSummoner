@@ -77,14 +77,17 @@
             });
             camera.start();
 
-            // Fix for mobile self video expansion
-            function resizeCanvas() {
-                const displayWidth = canvasElement.clientWidth;
-                canvasElement.width = displayWidth;
-                canvasElement.height = displayWidth * (480 / 640);
-            }
-            setTimeout(resizeCanvas, 100); // Initial resize after display
-            window.addEventListener('resize', resizeCanvas);
+            // Fix for mobile self video stretching
+            videoElement.addEventListener('loadedmetadata', () => {
+                const aspect = videoElement.videoHeight / videoElement.videoWidth;
+                function resizeCanvas() {
+                    const displayWidth = canvasElement.parentElement.clientWidth - 20; // padding adjustment
+                    canvasElement.width = displayWidth;
+                    canvasElement.height = displayWidth * aspect;
+                }
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+            });
         };
         function onResults(results) {
             canvasCtx.save();

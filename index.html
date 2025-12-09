@@ -76,6 +76,15 @@
                 facingMode: 'user'  // Use front camera on mobile
             });
             camera.start();
+
+            // Fix for mobile self video expansion
+            function resizeCanvas() {
+                const displayWidth = canvasElement.clientWidth;
+                canvasElement.width = displayWidth;
+                canvasElement.height = displayWidth * (480 / 640);
+            }
+            setTimeout(resizeCanvas, 100); // Initial resize after display
+            window.addEventListener('resize', resizeCanvas);
         };
         function onResults(results) {
             canvasCtx.save();

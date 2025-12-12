@@ -15,6 +15,7 @@
         button { padding: 15px 30px; font-size: 20px; background: #007bff; color: white; border: none; border-radius: 10px; cursor: pointer; margin: 20px; }
         button:hover { background: #0056b3; }
         h1 { color: #333; }
+
         /* Mobile optimizations */
         @media (max-width: 768px) {
             body { margin: 10px; padding: 10px; }
@@ -35,7 +36,7 @@
     <div class="container" id="mainContainer" style="display:none;">
         <div class="box">
             <h2>Camera</h2>
-            <video id="webcam" autoplay playsinline width="640" height="480" style="position:absolute; left:-9999px; top:-9999px;"></video>
+            <video id="webcam" autoplay playsinline width="640" height="480" style="display:none;"></video>
             <canvas id="output_canvas" width="640" height="480"></canvas>
         </div>
         <div class="box">
@@ -65,17 +66,17 @@
                 maxNumHands: 1,
                 modelComplexity: 1,
                 minDetectionConfidence: 0.6,
-                minTrackingConfidence: 0.6,
-                selfieMode: true
+                minTrackingConfidence: 0.6
             });
             hands.onResults(onResults);
             const camera = new Camera(videoElement, {
                 onFrame: async () => await hands.send({image: videoElement}),
                 width: 640,
                 height: 480,
-                facingMode: 'user' // Use front camera on mobile
+                facingMode: 'user'  // Use front camera on mobile
             });
             camera.start();
+
             // Fix for mobile self video stretching
             videoElement.addEventListener('loadedmetadata', () => {
                 const aspect = videoElement.videoHeight / videoElement.videoWidth;
@@ -93,81 +94,39 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             let currentPaper = false;
-            let debugText = '';
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                for (let idx = 0; idx < results.multiHandLandmarks.length; idx++) {
-                    const landmarks = results.multiHandLandmarks[idx];
-                    const handedness = results.multi_handedness ? results.multi_handedness[idx].label : 'Right';
+                for (const landmarks of results.multiHandLandmarks) {
                     drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
                     drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2});
-                    const check = isPaperCheck(landmarks, handedness);
-                    if (check.isPaper) {
-                        currentPaper = true;
-                    } else {
-                        debugText = check.reason;
-                    }
+                    if (isPaper(landmarks)) currentPaper = true;
                 }
-            } else {
-                debugText = 'No hand detected';
             }
-            // Display debug text
-            canvasCtx.font = '20px Arial';
-            canvasCtx.fillStyle = 'red';
-            canvasCtx.fillText(debugText, 10, 30);
             // Video control
             if (currentPaper && !paperDetected) {
                 targetVideo.currentTime = 0;
                 targetVideo.play(); // now allowed because user clicked the button first
-                targetVideo.style.position = 'fixed';
-                targetVideo.style.top = '0';
-                targetVideo.style.left = '0';
-                targetVideo.style.width = '100vw';
-                targetVideo.style.height = '100vh';
-                targetVideo.style.zIndex = '1000';
-                targetVideo.style.border = 'none';
-                targetVideo.style.borderRadius = '0';
                 paperDetected = true;
+
+                // Android-specific scroll to video
+                const isAndroid = /Android/i.test(navigator.userAgent);
+                if (isAndroid) {
+                    targetVideo.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }
             } else if (!currentPaper && paperDetected) {
                 targetVideo.pause();
                 targetVideo.currentTime = 0;
-                targetVideo.style.position = '';
-                targetVideo.style.top = '';
-                targetVideo.style.left = '';
-                targetVideo.style.width = '640px';
-                targetVideo.style.height = '480px';
-                targetVideo.style.zIndex = '';
-                targetVideo.style.border = '5px solid #333';
-                targetVideo.style.borderRadius = '12px';
                 paperDetected = false;
             }
             canvasCtx.restore();
         }
-        function isPaperCheck(landmarks, handedness) {
-            const lm = landmarks;
+        function isPaper(landmarks) {
             const tips = [4, 8, 12, 16, 20];
             const mcps = [2, 5, 9, 13, 17];
             let extended = 0;
             for (let i = 0; i < 5; i++) {
-                if (lm[tips[i]].y < lm[mcps[i]].y - 0.01) extended++;
+                if (landmarks[tips[i]].y < landmarks[mcps[i]].y - 0.03) extended++;
             }
-            if (extended < 4) return {isPaper: false, reason: 'Fingers not fully extended'};
-            // Palm facing forward check with z-depth
-            const wristZ = lm[0].z;
-            const avgTipZ = (lm[4].z + lm[8].z + lm[12].z + lm[16].z + lm[20].z) / 5;
-            const palmForward = avgTipZ < wristZ; // Corrected condition
-            if (!palmForward) return {isPaper: false, reason: 'Palm not facing forward'};
-            // Thumb side correct
-            const isRightHand = handedness === 'Right';
-            const thumbSideCorrect = isRightHand ? lm[4].x < lm[8].x : lm[4].x > lm[8].x;
-            if (!thumbSideCorrect) return {isPaper: false, reason: 'Palm not facing camera'};
-            // Fingers spread out check
-            const tipsX = [lm[4].x, lm[8].x, lm[12].x, lm[16].x, lm[20].x].sort((a, b) => a - b);
-            let spread = true;
-            for (let i = 1; i < 5; i++) {
-                if (tipsX[i] - tipsX[i - 1] < 0.02) spread = false;
-            }
-            if (!spread) return {isPaper: false, reason: 'Fingers not spread out'};
-            return {isPaper: true, reason: ''};
+            return extended >= 4;
         }
     </script>
 </body>

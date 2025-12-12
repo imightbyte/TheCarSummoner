@@ -18,7 +18,6 @@
         button:hover { background: #0056b3; }
         h1 { color: #333; }
 
-        /* Mobile optimizations */
         @media (max-width: 768px) {
             body { margin: 10px; padding: 10px; }
             .container { flex-direction: column; gap: 20px; }
@@ -35,11 +34,143 @@
     <h1>Show an &#129783 → Video Plays!</h1>
     <p>Close your hand → video pauses & scrolls back to the camera</p>
 
-    <!-- One-time activation button -->
     <button id="startBtn">CLICK HERE TO ACTIVATE CAMERA & VIDEO</button>
 
     <div class="container" id="mainContainer" style="display:none;">
         <div class="box" id="cameraBox">
             <h2>Camera</h2>
             <video id="webcam" autoplay playsinline width="640" height="480" style="display:none;"></video>
-            <canvas id="output_canvas"_
+            <canvas id="output_canvas" width="640" height="480"></canvas>
+        </div>
+
+        <div class="box" id="videoBox">
+            <h2>Brand Video</h2>
+            <video id="myVideo" width="640" height="480" loop muted playsinline webkit-playsinline>
+                <source src="Uber.mp4" type="video/mp4">
+                Your browser does not support video.
+            </video>
+        </div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const mainContainer = document.getElementById('mainContainer');
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const targetVideo = document.getElementById('myVideo');
+
+        const cameraBox = document.getElementById("cameraBox");
+        const videoBox = document.getElementById("videoBox");
+
+        let paperDetected = false;
+
+        startBtn.onclick = async () => {
+            startBtn.style.display = 'none';
+            mainContainer.style.display = 'flex';
+
+            targetVideo.load();
+
+            const hands = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
+            });
+
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.6
+            });
+
+            hands.onResults(onResults);
+
+            const camera = new Camera(videoElement, {
+                onFrame: async () => await hands.send({ image: videoElement }),
+                width: 640,
+                height: 480,
+                facingMode: 'user'
+            });
+
+            camera.start();
+
+            videoElement.addEventListener('loadedmetadata', () => {
+                const aspect = videoElement.videoHeight / videoElement.videoWidth;
+
+                function resizeCanvas() {
+                    const displayWidth = canvasElement.parentElement.clientWidth - 20;
+                    canvasElement.width = displayWidth;
+                    canvasElement.height = displayWidth * aspect;
+                }
+
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+            });
+        };
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            let currentPaper = false;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+                    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
+
+                    if (isPaper(landmarks)) currentPaper = true;
+                }
+            }
+
+            if (currentPaper && !paperDetected) {
+                targetVideo.currentTime = 0;
+                targetVideo.play();
+                paperDetected = true;
+
+                // ★ Delay scroll to preserve iOS gesture activation
+                setTimeout(() => {
+                    videoBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 300);
+            }
+
+            else if (!currentPaper && paperDetected) {
+                targetVideo.pause();
+                targetVideo.currentTime = 0;
+                paperDetected = false;
+
+                // ★ Delay scroll back to camera
+                setTimeout(() => {
+                    cameraBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 300);
+            }
+
+            canvasCtx.restore();
+        }
+
+        function isPaper(landmarks) {
+            const tips = [4, 8, 12, 16, 20];
+            const mcps = [2, 5, 9, 13, 17];
+            let extended = 0;
+
+            for (let i = 0; i < 5; i++) {
+                if (landmarks[tips[i]].y < landmarks[mcps[i]].y - 0.03) extended++;
+            }
+
+            if (extended < 4) return false;
+
+            const tipsX = [
+                landmarks[4].x, landmarks[8].x,
+                landmarks[12].x, landmarks[16].x,
+                landmarks[20].x
+            ].sort((a, b) => a - b);
+
+            for (let i = 1; i < 5; i++) {
+                if (tipsX[i] - tipsX[i - 1] < 0.03) return false;
+            }
+
+            return true;
+        }
+    </script>
+</body>
+</html>

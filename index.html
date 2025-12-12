@@ -15,7 +15,6 @@
         button { padding: 15px 30px; font-size: 20px; background: #007bff; color: white; border: none; border-radius: 10px; cursor: pointer; margin: 20px; }
         button:hover { background: #0056b3; }
         h1 { color: #333; }
-
         /* Mobile optimizations */
         @media (max-width: 768px) {
             body { margin: 10px; padding: 10px; }
@@ -36,7 +35,7 @@
     <div class="container" id="mainContainer" style="display:none;">
         <div class="box">
             <h2>Camera</h2>
-            <video id="webcam" autoplay playsinline width="640" height="480" style="display:none;"></video>
+            <video id="webcam" autoplay playsinline width="640" height="480" style="position:absolute; left:-9999px; top:-9999px;"></video>
             <canvas id="output_canvas" width="640" height="480"></canvas>
         </div>
         <div class="box">
@@ -74,10 +73,9 @@
                 onFrame: async () => await hands.send({image: videoElement}),
                 width: 640,
                 height: 480,
-                facingMode: 'user'  // Use front camera on mobile
+                facingMode: 'user' // Use front camera on mobile
             });
             camera.start();
-
             // Fix for mobile self video stretching
             videoElement.addEventListener('loadedmetadata', () => {
                 const aspect = videoElement.videoHeight / videoElement.videoWidth;
@@ -135,16 +133,16 @@
                 targetVideo.style.position = '';
                 targetVideo.style.top = '';
                 targetVideo.style.left = '';
-                targetVideo.style.width = '';
-                targetVideo.style.height = '';
+                targetVideo.style.width = '640px';
+                targetVideo.style.height = '480px';
                 targetVideo.style.zIndex = '';
-                targetVideo.style.border = '';
-                targetVideo.style.borderRadius = '';
+                targetVideo.style.border = '5px solid #333';
+                targetVideo.style.borderRadius = '12px';
                 paperDetected = false;
             }
             canvasCtx.restore();
         }
-        function isPaperCheck(landmarks, handLabel) {
+        function isPaperCheck(landmarks, handedness) {
             const lm = landmarks;
             const tips = [4, 8, 12, 16, 20];
             const mcps = [2, 5, 9, 13, 17];
@@ -156,10 +154,10 @@
             // Palm facing forward check with z-depth
             const wristZ = lm[0].z;
             const avgTipZ = (lm[4].z + lm[8].z + lm[12].z + lm[16].z + lm[20].z) / 5;
-            const palmForward = avgTipZ < wristZ;  // Corrected condition
+            const palmForward = avgTipZ < wristZ; // Corrected condition
             if (!palmForward) return {isPaper: false, reason: 'Palm not facing forward'};
             // Thumb side correct
-            const isRightHand = handLabel === 'Right';
+            const isRightHand = handedness === 'Right';
             const thumbSideCorrect = isRightHand ? lm[4].x < lm[8].x : lm[4].x > lm[8].x;
             if (!thumbSideCorrect) return {isPaper: false, reason: 'Palm not facing camera'};
             // Fingers spread out check

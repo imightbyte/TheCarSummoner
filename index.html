@@ -120,26 +120,26 @@
             if (currentPaper && !paperDetected) {
                 targetVideo.currentTime = 0;
                 targetVideo.play(); // now allowed because user clicked the button first
+                targetVideo.style.position = 'fixed';
+                targetVideo.style.top = '0';
+                targetVideo.style.left = '0';
+                targetVideo.style.width = '100vw';
+                targetVideo.style.height = '100vh';
+                targetVideo.style.zIndex = '1000';
+                targetVideo.style.border = 'none';
+                targetVideo.style.borderRadius = '0';
                 paperDetected = true;
-                const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-                if (isIOS) {
-                    targetVideo.webkitEnterFullScreen();
-                } else {
-                    targetVideo.requestFullscreen();
-                }
             } else if (!currentPaper && paperDetected) {
                 targetVideo.pause();
                 targetVideo.currentTime = 0;
-                const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-                if (isIOS) {
-                    if (targetVideo.webkitDisplayingFullscreen) {
-                        targetVideo.webkitExitFullscreen();
-                    }
-                } else {
-                    if (document.fullscreenElement) {
-                        document.exitFullscreen();
-                    }
-                }
+                targetVideo.style.position = '';
+                targetVideo.style.top = '';
+                targetVideo.style.left = '';
+                targetVideo.style.width = '640px';
+                targetVideo.style.height = '480px';
+                targetVideo.style.zIndex = '';
+                targetVideo.style.border = '5px solid #333';
+                targetVideo.style.borderRadius = '12px';
                 paperDetected = false;
             }
             canvasCtx.restore();
@@ -156,7 +156,7 @@
             // Palm facing forward check with z-depth
             const wristZ = lm[0].z;
             const avgTipZ = (lm[4].z + lm[8].z + lm[12].z + lm[16].z + lm[20].z) / 5;
-            const palmForward = avgTipZ > wristZ;  // Reversed condition
+            const palmForward = avgTipZ < wristZ;  // Corrected condition
             if (!palmForward) return {isPaper: false, reason: 'Palm not facing forward'};
             // Thumb side correct
             const isRightHand = handLabel === 'Right';

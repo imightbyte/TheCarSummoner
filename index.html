@@ -15,7 +15,6 @@
         button { padding: 15px 30px; font-size: 20px; background: #007bff; color: white; border: none; border-radius: 10px; cursor: pointer; margin: 20px; }
         button:hover { background: #0056b3; }
         h1 { color: #333; }
-
         /* Mobile optimizations */
         @media (max-width: 768px) {
             body { margin: 10px; padding: 10px; }
@@ -66,8 +65,7 @@
                 maxNumHands: 1,
                 modelComplexity: 1,
                 minDetectionConfidence: 0.6,
-                minTrackingConfidence: 0.6,
-                selfieMode: true
+                minTrackingConfidence: 0.6
             });
             hands.onResults(onResults);
             const camera = new Camera(videoElement, {
@@ -140,7 +138,7 @@
 
             // Thumb side correct for left/right hand
             const isRightHand = handedness === 'Right';
-            const thumbSideCorrect = isRightHand ? lm[4].x < lm[8].x : lm[4].x > lm[8].x;
+            const thumbSideCorrect = isRightHand ? lm[4].x > lm[8].x : lm[4].x < lm[8].x;  // Swapped for selfie mode
             if (!thumbSideCorrect) return false;
 
             // Fingers spread out check

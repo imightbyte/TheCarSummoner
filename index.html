@@ -66,8 +66,7 @@
                 maxNumHands: 1,
                 modelComplexity: 1,
                 minDetectionConfidence: 0.6,
-                minTrackingConfidence: 0.6,
-                selfieMode: true
+                minTrackingConfidence: 0.6
             });
             hands.onResults(onResults);
             const camera = new Camera(videoElement, {
@@ -96,12 +95,10 @@
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             let currentPaper = false;
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                for (let idx = 0; idx < results.multiHandLandmarks.length; idx++) {
-                    const landmarks = results.multiHandLandmarks[idx];
-                    const handedness = results.multiHandedness ? results.multiHandedness[idx].label : 'Right';
+                for (const landmarks of results.multiHandLandmarks) {
                     drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
                     drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2});
-                    if (isPaper(landmarks, handedness)) currentPaper = true;
+                    if (isPaper(landmarks)) currentPaper = true;
                 }
             }
             // Video control
@@ -122,40 +119,25 @@
             }
             canvasCtx.restore();
         }
-        function isPaper(landmarks, handedness) {
+        function isPaper(landmarks) {
             const lm = landmarks;
             const tips = [4, 8, 12, 16, 20];
             const mcps = [2, 5, 9, 13, 17];
+
+            // Check all fingers extended
             let extended = 0;
             for (let i = 0; i < 5; i++) {
                 if (lm[tips[i]].y < lm[mcps[i]].y - 0.03) extended++;
             }
             if (extended < 5) return false;
 
-            // Palm or back facing camera check using z-depth
-            const wristZ = lm[0].z;
-            const avgTipZ = (lm[4].z + lm[8].z + lm[12].z + lm[16].z + lm[20].z) / 5;
-            const isForward = avgTipZ < wristZ;
-            const isBackward = avgTipZ > wristZ;
-            if (!isForward && !isBackward) return false;
-
-            // Adjust thumb side check based on orientation
-            const isRightHand = handedness === 'Right';
-            let thumbSideCorrect;
-            if (isForward) {
-                thumbSideCorrect = isRightHand ? lm[4].x < lm[8].x : lm[4].x > lm[8].x;
-            } else { // backward
-                thumbSideCorrect = isRightHand ? lm[4].x > lm[8].x : lm[4].x < lm[8].x;
-            }
-            if (!thumbSideCorrect) return false;
-
-            // Fingers spread out check
-            const tipsX = [lm[4].x, lm[8].x, lm[12].x, lm[16].x, lm[20].x].sort((a, b) => a - b);
-            let spread = true;
+            // Check fingers are spread out (minimum distance between consecutive tips)
+            const tipX = lm[4].x, lm[8].x, lm[12].x, lm[16].x, lm[20].x];
+            const sortedTipsX = [lm[4].x, lm[8].x, lm[12].x, lm[16].x, lm[20].x].sort((a, b) => a - b);
+            const minSpread = 0.04; // Adjust this value if needed (higher = more spread required)
             for (let i = 1; i < 5; i++) {
-                if (tipsX[i] - tipsX[i - 1] < 0.03) spread = false;
+                if (sortedTipsX[i] - sortedTipsX[i-1] < minSpread) return false;
             }
-            if (!spread) return false;
 
             return true;
         }

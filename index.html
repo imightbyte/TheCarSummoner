@@ -31,6 +31,7 @@
 <body>
     <h1>Show an &#129783 → Video Plays!</h1>
     <p>Close your hand → video pauses and resets</p>
+    <!-- One-time activation button (required by browsers) -->
     <button id="startBtn">CLICK HERE TO ACTIVATE CAMERA & VIDEO</button>
     <div class="container" id="mainContainer" style="display:none;">
         <div class="box">
@@ -40,7 +41,7 @@
         </div>
         <div class="box">
             <h2>Brand Video</h2>
-            <video id="myVideo" width="640" height="480" loop muted playsinline>
+            <video id="myVideo" width="640" height="480" loop muted>
                 <source src="Uber.mp4" type="video/mp4">
                 Your browser does not support video.
             </video>
@@ -54,35 +55,34 @@
         const canvasCtx = canvasElement.getContext('2d');
         const targetVideo = document.getElementById('myVideo');
         let paperDetected = false;
-
         // Unlock everything on first click
         startBtn.onclick = async () => {
             startBtn.style.display = 'none';
             mainContainer.style.display = 'flex';
+            // Preload the video so it can play instantly later
             targetVideo.load();
-
             const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`});
             hands.setOptions({
                 maxNumHands: 1,
                 modelComplexity: 1,
                 minDetectionConfidence: 0.6,
-                minTrackingConfidence: 0.6
+                minTrackingConfidence: 0.6,
+                selfieMode: true
             });
             hands.onResults(onResults);
-
             const camera = new Camera(videoElement, {
                 onFrame: async () => await hands.send({image: videoElement}),
                 width: 640,
                 height: 480,
-                facingMode: 'user'
+                facingMode: 'user'  // Use front camera on mobile
             });
             camera.start();
 
-            // Fix mobile stretching
+            // Fix for mobile self video stretching
             videoElement.addEventListener('loadedmetadata', () => {
                 const aspect = videoElement.videoHeight / videoElement.videoWidth;
                 function resizeCanvas() {
-                    const displayWidth = canvasElement.parentElement.clientWidth - 20;
+                    const displayWidth = canvasElement.parentElement.clientWidth - 20; // padding adjustment
                     canvasElement.width = displayWidth;
                     canvasElement.height = displayWidth * aspect;
                 }
@@ -90,84 +90,65 @@
                 window.addEventListener('resize', resizeCanvas);
             });
         };
-
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
             let currentPaper = false;
-
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                for (const landmarks of results.multiHandLandmarks) {
+                for (let idx = 0; idx < results.multiHandLandmarks.length; idx++) {
+                    const landmarks = results.multiHandLandmarks[idx];
+                    const handedness = results.multi_handedness ? results.multi_handedness[idx].label : 'Right';
                     drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
                     drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2});
-
-                    // STRONGER palm-open detection: all fingers spread + palm facing camera
-                    if (isStrictPaper(landmarks)) {
-                        currentPaper = true;
-                    }
+                    if (isPaper(landmarks, handedness)) currentPaper = true;
                 }
             }
-
-            // Video control + Fullscreen on iOS & Android when gesture is detected
+            // Video control
             if (currentPaper && !paperDetected) {
                 targetVideo.currentTime = 0;
-                targetVideo.play();
-
-                // Fullscreen on iOS & Android
-                if (targetVideo.requestFullscreen) {
-                    targetVideo.requestFullscreen();
-                } else if (targetVideo.webkitRequestFullscreen) { /* Safari */
-                    targetVideo.webkitRequestFullscreen();
-                } else if (targetVideo.webkitEnterFullscreen) { /* iOS Safari */
-                    targetVideo.webkitEnterFullscreen();
+                targetVideo.play(); // now allowed because user clicked the button first
+                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                    targetVideo.webkitEnterFullScreen();
+                } else if (/Android/.test(navigator.userAgent)) {
+                    targetVideo.requestFullScreen();
                 }
-
                 paperDetected = true;
-            } 
-            else if (!currentPaper && paperDetected) {
+            } else if (!currentPaper && paperDetected) {
                 targetVideo.pause();
                 targetVideo.currentTime = 0;
-
-                // Exit fullscreen on both iOS and Android
-                if (document.fullscreenElement) {
-                    document.exitFullscreen();
-                } else if (document.webkitFullscreenElement) {
-                    document.webkitExitFullscreen();
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    }
                 }
-
                 paperDetected = false;
             }
-
             canvasCtx.restore();
         }
-
-        // Strict palm-open detection: fingers spread + palm facing forward
-        function isStrictPaper(landmarks) {
-            const wrist = landmarks[0];
-            const mcpIndex = landmarks[5];
-            const mcpMiddle = landmarks[9];
-            const mcpRing = landmarks[13];
-            const mcpPinky = landmarks[17];
-
-            // Check palm is facing forward (wrist behind finger bases)
-            const palmFacingForward = wrist.y > mcpIndex.y && wrist.y > mcpMiddle.y;
-
-            // Check fingers are spread out (horizontal distance between MCPs)
-            const spreadIndexMiddle = Math.abs(mcpIndex.x - mcpMiddle.x) > 0.08;
-            const spreadMiddleRing = Math.abs(mcpMiddle.x - mcpRing.x) > 0.08;
-            const spreadRingPinky = Math.abs(mcpRing.x - mcpPinky.x) > 0.07;
-
-            // All fingertips above their MCPs (fully extended)
+        function isPaper(landmarks, handLabel) {
+            const lm = landmarks;
             const tips = [4, 8, 12, 16, 20];
             const mcps = [2, 5, 9, 13, 17];
             let extended = 0;
             for (let i = 0; i < 5; i++) {
-                if (landmarks[tips[i]].y < landmarks[mcps[i]].y - 0.05) extended++;
+                if (lm[tips[i]].y < lm[mcps[i]].y - 0.03) extended++;
             }
-
-            return palmFacingForward && spreadIndexMiddle && spreadMiddleRing && spreadRingPinky && extended >= 5;
+            if (extended !== 5) return false;
+            // Palm facing forward check
+            const isRightHand = handLabel === 'Right';
+            const thumbSideCorrect = isRightHand ? lm[4].x < lm[8].x : lm[4].x > lm[8].x;
+            if (!thumbSideCorrect) return false;
+            // Fingers spread out check
+            const tipsX = [lm[4].x, lm[8].x, lm[12].x, lm[16].x, lm[20].x].sort((a, b) => a - b);
+            let spread = true;
+            for (let i = 1; i < 5; i++) {
+                if (tipsX[i] - tipsX[i - 1] < 0.03) spread = false;
+            }
+            if (!spread) return false;
+            return true;
         }
     </script>
 </body>

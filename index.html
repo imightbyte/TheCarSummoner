@@ -95,25 +95,38 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             let currentPaper = false;
+            let debugText = '';
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 for (let idx = 0; idx < results.multiHandLandmarks.length; idx++) {
                     const landmarks = results.multiHandLandmarks[idx];
                     const handedness = results.multi_handedness ? results.multi_handedness[idx].label : 'Right';
                     drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
                     drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2});
-                    if (isPaper(landmarks, handedness)) currentPaper = true;
+                    const check = isPaperCheck(landmarks, handedness);
+                    if (check.isPaper) {
+                        currentPaper = true;
+                    } else {
+                        debugText = check.reason;
+                    }
                 }
+            } else {
+                debugText = 'No hand detected';
             }
+            // Display debug text
+            canvasCtx.font = '20px Arial';
+            canvasCtx.fillStyle = 'red';
+            canvasCtx.fillText(debugText, 10, 30);
             // Video control
             if (currentPaper && !paperDetected) {
                 targetVideo.currentTime = 0;
                 targetVideo.play(); // now allowed because user clicked the button first
-                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-                    targetVideo.webkitEnterFullScreen();
-                } else if (/Android/.test(navigator.userAgent)) {
-                    targetVideo.requestFullScreen();
-                }
                 paperDetected = true;
+                const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+                if (isIOS) {
+                    targetVideo.webkitEnterFullScreen();
+                } else {
+                    targetVideo.requestFullscreen();
+                }
             } else if (!currentPaper && paperDetected) {
                 targetVideo.pause();
                 targetVideo.currentTime = 0;
@@ -128,7 +141,7 @@
             }
             canvasCtx.restore();
         }
-        function isPaper(landmarks, handLabel) {
+        function isPaperCheck(landmarks, handLabel) {
             const lm = landmarks;
             const tips = [4, 8, 12, 16, 20];
             const mcps = [2, 5, 9, 13, 17];
@@ -136,19 +149,19 @@
             for (let i = 0; i < 5; i++) {
                 if (lm[tips[i]].y < lm[mcps[i]].y - 0.03) extended++;
             }
-            if (extended !== 5) return false;
+            if (extended !== 5) return {isPaper: false, reason: 'Fingers not fully extended'};
             // Palm facing forward check
             const isRightHand = handLabel === 'Right';
             const thumbSideCorrect = isRightHand ? lm[4].x < lm[8].x : lm[4].x > lm[8].x;
-            if (!thumbSideCorrect) return false;
+            if (!thumbSideCorrect) return {isPaper: false, reason: 'Palm not facing camera'};
             // Fingers spread out check
             const tipsX = [lm[4].x, lm[8].x, lm[12].x, lm[16].x, lm[20].x].sort((a, b) => a - b);
             let spread = true;
             for (let i = 1; i < 5; i++) {
                 if (tipsX[i] - tipsX[i - 1] < 0.03) spread = false;
             }
-            if (!spread) return false;
-            return true;
+            if (!spread) return {isPaper: false, reason: 'Fingers not spread out'};
+            return {isPaper: true, reason: ''};
         }
     </script>
 </body>
